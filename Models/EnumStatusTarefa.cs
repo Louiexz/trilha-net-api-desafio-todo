@@ -1,8 +1,8 @@
 namespace TrilhaApiDesafio.Models
 {
-    public enum EnumStatusTarefa
+    public enum EnumScheduleStatus
     {
-        Pendente,
-        Finalizado
+        ToDo,
+        Finished
     }
 }

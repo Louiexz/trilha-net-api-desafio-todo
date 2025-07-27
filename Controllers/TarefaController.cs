@@ -1,98 +1,124 @@
 using Microsoft.AspNetCore.Mvc;
 using TrilhaApiDesafio.Context;
 using TrilhaApiDesafio.Models;
+using TrilhaApiDesafio.Dto;
 
 namespace TrilhaApiDesafio.Controllers
 {
     [ApiController]
-    [Route("[controller]")]
-    public class TarefaController : ControllerBase
+    [Route("schedule")]
+    public class ScheduleController : ControllerBase
     {
         private readonly OrganizadorContext _context;
 
-        public TarefaController(OrganizadorContext context)
+        public ScheduleController(OrganizadorContext context)
         {
             _context = context;
         }
 
-        [HttpGet("{id}")]
-        public IActionResult ObterPorId(int id)
+        [HttpGet("search")]
+        public IActionResult Search(int? id, string? title, DateTime? deadline, string? status)
         {
-            var tarefa = _context.Tarefas.Where(c => c.Id == id);
-            if (tarefa == null) return NotFound();
-            return Ok(tarefa);
+            var query = _context.Schedules.AsQueryable();
+
+            if (id.HasValue)
+                query = query.Where(c => c.Id == id.Value);
+
+            if (!string.IsNullOrEmpty(title))
+                query = query.Where(c => c.Title.Contains(title)); // ou == se quiser exato
+
+            if (deadline.HasValue)
+            {
+                var date = deadline.Value.Date;
+                query = query.Where(c => c.Deadline.Date == date);
+            }
+
+
+            if (!string.IsNullOrEmpty(status) &&
+                Enum.TryParse<EnumScheduleStatus>(status, true, out var statusEnum))
+            {
+                query = query.Where(c => c.Status == statusEnum);
+            }
+
+            var resultado = query.ToList();
+
+            if (!resultado.Any())
+                return NotFound("Nenhuma tarefa encontrada com os critérios informados.");
+
+            return Ok(resultado);
         }
 
         [HttpGet("all")]
         public IActionResult ObterTodos()
         {
-            var tarefas = _context.Tarefas.ToList();
-            if (tarefas == null) return NotFound();
-            return Ok(tarefas);
-        }
-
-        [HttpGet("title")]
-        public IActionResult ObterPorTitulo(string titulo)
-        {
-            var tarefa = _context.Tarefas.Where(c => c.Titulo == titulo);
-            if (tarefa == null) return NotFound();
-            return Ok(tarefa);
-        }
-
-        [HttpGet("date")]
-        public IActionResult ObterPorData(DateTime data)
-        {
-            var tarefa = _context.Tarefas.Where(x => x.Data.Date == data.Date);
-            return Ok(tarefa);
-        }
-
-        [HttpGet("status")]
-        public IActionResult ObterPorStatus(EnumStatusTarefa status)
-        {
-            var tarefa = _context.Tarefas.Where(x => x.Status == status);
-            return Ok(tarefa);
+            var schedulesList = _context.Schedules.ToList();
+            if (schedulesList == null) return NotFound();
+            return Ok(schedulesList);
         }
 
         [HttpPost]
-        public IActionResult Criar(Tarefa tarefa)
+        public IActionResult Criar(CreateSchedule newSchedule)
         {
-            if (tarefa.Data == DateTime.MinValue)
-                return BadRequest(new { Erro = "A data da tarefa não pode ser vazia" });
+            if (string.IsNullOrEmpty(newSchedule.Title))
+                return BadRequest("Insira um titulo válido");
 
-            _context.Tarefas.Add(tarefa);
+            if (string.IsNullOrEmpty(newSchedule.Description))
+                return BadRequest("Insira uma descrição válida");
+
+            if (newSchedule.Deadline == DateTime.MinValue)
+                return BadRequest("Insira uma data válida");
+
+            if (string.IsNullOrEmpty(newSchedule.Status) ||
+                !Enum.TryParse<EnumScheduleStatus>(newSchedule.Status, true, out var statusEnum))
+            {
+                return BadRequest("Insira um status válido");
+            }
+
+            var schedule = new Schedule {
+                Title = newSchedule.Title,
+                Description = newSchedule.Description,
+                Status = statusEnum,
+                CreatedAt = DateTime.Now,
+                UpdatedAt = DateTime.Now,
+                Deadline = newSchedule.Deadline
+            };
+
+            _context.Schedules.Add(schedule);
             _context.SaveChanges();
-            return CreatedAtAction(nameof(ObterPorId), new { id = tarefa.Id }, tarefa);
+            return CreatedAtAction(nameof(Search), new { id = schedule.Id }, schedule);
         }
 
-        [HttpPut("{id}")]
-        public IActionResult Atualizar(int id, Tarefa tarefa)
+        [HttpPatch]
+        public IActionResult Atualizar(int id, UpdateSchedule updateSchedule)
         {
-            var tarefaBanco = _context.Tarefas.Find(id);
+            var scheduleInBank = _context.Schedules.Find(id);
 
-            if (tarefaBanco == null)
-                return NotFound();
+            if (scheduleInBank == null)
+                return NotFound();            
 
-            if (tarefa.Data == DateTime.MinValue)
-                return BadRequest(new { Erro = "A data da tarefa não pode ser vazia" });
+            scheduleInBank.Title = updateSchedule.Title ?? scheduleInBank.Title;
+            scheduleInBank.Description = updateSchedule.Description ?? scheduleInBank.Description;
+            scheduleInBank.UpdatedAt = DateTime.Now;
+            scheduleInBank.Deadline = updateSchedule.Deadline ?? scheduleInBank.Deadline;   
 
-            tarefaBanco.Titulo = tarefa.Titulo;
-            tarefaBanco.Descricao = tarefa.Descricao;
-            tarefaBanco.Data = tarefa.Data;          
-            tarefaBanco.Status = tarefa.Status;
+            if (Enum.TryParse<EnumScheduleStatus>(updateSchedule.Status, true, out var statusEnum))
+            {
+                scheduleInBank.Status = statusEnum;
+            }
 
             _context.SaveChanges();
-            return Ok(tarefaBanco);
+            return Ok(scheduleInBank);
         }
 
-        [HttpDelete("{id}")]
+        [HttpDelete]
         public IActionResult Deletar(int id)
         {
-            var tarefaBanco = _context.Tarefas.Find(id);
+            var scheduleInBank = _context.Schedules.Find(id);
 
-            if (tarefaBanco == null)
+            if (scheduleInBank == null)
                 return NotFound();
 
-            _context.Tarefas.Remove(tarefaBanco);
+            _context.Schedules.Remove(scheduleInBank);
 
             _context.SaveChanges();
             return NoContent();

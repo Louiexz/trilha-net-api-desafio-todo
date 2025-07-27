@@ -10,6 +10,6 @@ namespace TrilhaApiDesafio.Context
             
         }
 
-        public DbSet<Tarefa> Tarefas { get; set; }
+        public DbSet<Schedule> Schedules { get; set; }
     }
 }
